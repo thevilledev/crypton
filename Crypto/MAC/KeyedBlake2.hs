@@ -15,6 +15,7 @@ module Crypto.MAC.KeyedBlake2 (
     KeyedBlake2 (..),
     keyedBlake2,
     keyedBlake2Lazy,
+    maxKeyLength,
 
     -- * Incremental
     Context,
@@ -24,6 +25,7 @@ module Crypto.MAC.KeyedBlake2 (
     finalize,
 ) where
 
+import Crypto.Error
 import qualified Crypto.Hash as H
 import Crypto.Hash.Blake2
 import qualified Crypto.Hash.Types as H
@@ -51,18 +53,31 @@ instance Eq (KeyedBlake2 a) where
 -- finalized to a 'KeyedBlake2' with 'finalize'.
 newtype Context a = Context (H.Context a)
 
+-- | The longest key the algorithm accepts, in bytes: 64 for the BLAKE2b
+-- family and 32 for BLAKE2s, which RFC 7693 section 2.1 gives as half the
+-- block size.  Note that this is not the digest size: BLAKE2b-256 takes a
+-- key of up to 64 bytes.
+maxKeyLength :: forall a. HashBlake2 a => a -> Int
+maxKeyLength _ = H.hashBlockSize (undefined :: a) `div` 2
+
 -- | Initialize a new incremental keyed Blake2 context with the supplied key.
+--
+-- The key must be between one byte and 'maxKeyLength' bytes long.  Any
+-- other length is an error and raises one: the underlying implementation
+-- refuses to initialize at all outside that range, and there is no length
+-- it could be adjusted to that would still be the caller's key.
 initialize
     :: forall a key
      . (HashBlake2 a, ByteArrayAccess key)
     => key -> Context a
-initialize k = Context $ H.Context $ B.allocAndFreeze ctxSz performInit
+initialize k
+    | keyByteLen < 1 || keyByteLen > maxKeyLen =
+        throwCryptoError (CryptoFailed CryptoError_MacKeyInvalid)
+    | otherwise = Context $ H.Context $ B.allocAndFreeze ctxSz performInit
   where
     ctxSz = H.hashInternalContextSize (undefined :: a)
-    digestSz = H.hashDigestSize (undefined :: a)
-    -- cap the number of key bytes at digestSz,
-    -- since that's the maximal key size
-    keyByteLen = min (B.length k) digestSz
+    maxKeyLen = maxKeyLength (undefined :: a)
+    keyByteLen = B.length k
     performInit :: Ptr (H.Context a) -> IO ()
     performInit ptr = B.withByteArray k $
         \keyPtr -> blake2InternalKeyedInit ptr keyPtr (fromIntegral keyByteLen)

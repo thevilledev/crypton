@@ -158,9 +158,12 @@ macTests =
 data MacIncremental a = MacIncremental ByteString ByteString (KB.KeyedBlake2 a)
     deriving (Show, Eq)
 
-instance KB.HashBlake2 a => Arbitrary (MacIncremental a) where
+-- The key range is the algorithm's own: up to 64 bytes for BLAKE2b and 32
+-- for BLAKE2s.  A fixed 32-64 here drew keys past the BLAKE2s maximum,
+-- which the implementation used to accept by truncating them.
+instance forall a. KB.HashBlake2 a => Arbitrary (MacIncremental a) where
     arbitrary = do
-        key <- arbitraryBSof 32 64
+        key <- arbitraryBSof 1 (KB.maxKeyLength (undefined :: a))
         msg <- arbitraryBSof 1 99
         return $ MacIncremental key msg (KB.keyedBlake2 key msg)
 
@@ -168,9 +171,9 @@ data MacIncrementalList a
     = MacIncrementalList ByteString [ByteString] (KB.KeyedBlake2 a)
     deriving (Show, Eq)
 
-instance KB.HashBlake2 a => Arbitrary (MacIncrementalList a) where
+instance forall a. KB.HashBlake2 a => Arbitrary (MacIncrementalList a) where
     arbitrary = do
-        key <- arbitraryBSof 32 64
+        key <- arbitraryBSof 1 (KB.maxKeyLength (undefined :: a))
         msgs <- choose (1, 20) >>= \n -> replicateM n (arbitraryBSof 1 99)
         return $ MacIncrementalList key msgs (KB.keyedBlake2 key (B.concat msgs))
 
