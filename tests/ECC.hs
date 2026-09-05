@@ -106,6 +106,20 @@ vectorsPoint =
             "040000d7fc4050dfe73475502d5d1fadc105d7725508f48da2cd4729bf191fd6490a000001a16f417a27530e756efeb4a228f02db878072b9f833e99a2821d85fa78fc"
         , vpError = Just CryptoError_PublicKeySizeInvalid -- tests leading zeros
         }
+    , -- valid points that the curve equation check used to reject: x = 0,
+      -- and y = 1 (for which x^3 - 3x + b lands in [p, 2^256))
+      VectorPoint
+        { vpCurve = Curve ECC.Curve_P256R1
+        , vpHex =
+            "04000000000000000000000000000000000000000000000000000000000000000066485c780e2f83d72433bd5d84a06bb6541c2af31dae871728bf856a174f93f4"
+        , vpError = Nothing
+        }
+    , VectorPoint
+        { vpCurve = Curve ECC.Curve_P256R1
+        , vpHex =
+            "0409e78d4ef60d05f750f6636209092bc43cbdd6b47e11a9de20a9feb2a50bb96c0000000000000000000000000000000000000000000000000000000000000001"
+        , vpError = Nothing
+        }
     , VectorPoint
         { vpCurve = Curve ECC.Curve_P384R1
         , vpHex = ""

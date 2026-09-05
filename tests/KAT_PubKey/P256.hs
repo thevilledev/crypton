@@ -73,6 +73,19 @@ yT = 0x5421c3209c2d6c704835d82ac4c3dd90f61a8a52598b9e7ab656e9d8c8b24316
 xR = 0x72b13dd4354b6b81745195e98cc5ba6970349191ac476bd4553cf35a545a067e
 yR = 0x8d585cbb2e1327d75241a8a122d7620dc33b13315aa5c9d46d013011744ac264
 
+-- b is a quadratic residue, so P-256 has two points with x = 0.
+-- Wycheproof ecdh_secp256r1_ecpoint tcId 69 and 199.
+xZ = 0
+yZ = 0x66485c780e2f83d72433bd5d84a06bb6541c2af31dae871728bf856a174f93f4
+
+-- Points with y = 1, so that x^3 - 3x + b is p + 1 -- inside the window
+-- [p, 2^256) that the curve equation check leaves unreduced.  Wycheproof
+-- ecdh_secp256r1_ecpoint tcId 228 and 234.
+xY1 = 0x09e78d4ef60d05f750f6636209092bc43cbdd6b47e11a9de20a9feb2a50bb96c
+yY1 = 1
+xY2 = 0x6916fac45e568b6b9e2e2ecd611b282e5fcc40a3067d601057f879ce5a8a73cc
+yY2 = 1
+
 tests =
     testGroup
         "P256"
@@ -142,6 +155,12 @@ tests =
             , testCase "valid-point-1" $ casePointIsValid (xS, yS)
             , testCase "valid-point-2" $ casePointIsValid (xR, yR)
             , testCase "valid-point-3" $ casePointIsValid (xT, yT)
+            , -- x = 0 is a valid coordinate on P-256, and the curve
+              -- equation has to be compared modulo p rather than as
+              -- whatever the additions happened to leave behind.
+              testCase "valid-point-x-zero" $ casePointIsValid (xZ, yZ)
+            , testCase "valid-point-y-one-1" $ casePointIsValid (xY1, yY1)
+            , testCase "valid-point-y-one-2" $ casePointIsValid (xY2, yY2)
             , testCase "point-add-1" $
                 let s = P256.pointFromIntegers (xS, yS)
                     t = P256.pointFromIntegers (xT, yT)
