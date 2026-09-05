@@ -347,9 +347,12 @@ void crypton_p256_mod(const crypton_p256_int* MOD,
 int crypton_p256_is_valid_point(const crypton_p256_int* x, const crypton_p256_int* y) {
   crypton_p256_int y2, x3;
 
+  /* x = 0 is a valid coordinate: b is a quadratic residue mod p, so the
+     curve has two points with x = 0.  y = 0 is not, on a curve of prime
+     order, and rejecting it keeps the (0, 0) encoding of the point at
+     infinity out of the valid set. */
   if (crypton_p256_cmp(&crypton_SECP256r1_p, x) <= 0 ||
       crypton_p256_cmp(&crypton_SECP256r1_p, y) <= 0 ||
-      crypton_p256_is_zero(x) ||
       crypton_p256_is_zero(y)) return 0;
 
   crypton_p256_modmul(&crypton_SECP256r1_p, y, 0, y, &y2);  // y^2
@@ -361,6 +364,12 @@ int crypton_p256_is_valid_point(const crypton_p256_int* x, const crypton_p256_in
   if (crypton_p256_sub(&x3, x, &x3)) crypton_p256_add(&x3, &crypton_SECP256r1_p, &x3);  // x^3 - 3x
   if (crypton_p256_add(&x3, &crypton_SECP256r1_b, &x3))  // x^3 - 3x + b
     crypton_p256_sub(&x3, &crypton_SECP256r1_p, &x3);
+
+  /* The addition above reduces only when it carries out of 256 bits, but
+     the sum can also land in [p, 2^256) with no carry -- whenever y^2 is
+     below 2^256 - p.  The left-hand side comes back from modmul fully
+     reduced, so reduce this side too before comparing. */
+  crypton_p256_mod(&crypton_SECP256r1_p, &x3, &x3);
 
   return crypton_p256_cmp(&y2, &x3) == 0;
 }
