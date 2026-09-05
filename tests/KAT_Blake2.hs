@@ -1,13 +1,16 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module KAT_Blake2 (tests) where
 
+import Control.Exception (SomeException, evaluate, try)
 import Crypto.Hash (digestFromByteString)
 import Crypto.Hash.Algorithms
 import qualified Crypto.MAC.KeyedBlake2 as KB
 
+import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 
 import Imports
@@ -195,9 +198,47 @@ macIncrementalTests =
     prop_inc1 _ (MacIncrementalList secret msgs result) =
         result `assertEq` KB.finalize (foldl' KB.update (KB.initialize secret) msgs)
 
+-- RFC 7693 section 2.1 allows a key of up to 64 bytes for BLAKE2b and 32
+-- for BLAKE2s -- half the block size in each case -- and the reference C
+-- refuses anything longer, as well as a zero-length key.  crypton discards
+-- that refusal, because blake2InternalKeyedInit is imported as IO (), and
+-- caps the key at the digest size instead.  So an over-long key is
+-- silently truncated, a key between the digest size and the real maximum
+-- is truncated even though it is legal, and an empty key leaves the
+-- context uninitialised.
+keyLengthTests :: [TestTree]
+keyLengthTests =
+    [ testCase "blake2b-512 accepts a 64-byte key" $ 64 @=? B.length (macB512 64)
+    , testCase "blake2b-512 rejects a 65-byte key" $ rejected (macB512 65)
+    , testCase "blake2b-512 rejects an empty key" $ rejected (macB512 0)
+    , testCase "blake2s-256 accepts a 32-byte key" $ 32 @=? B.length (macS256 32)
+    , testCase "blake2s-256 rejects a 33-byte key" $ rejected (macS256 33)
+    , testCase "blake2s-256 rejects an empty key" $ rejected (macS256 0)
+    , testCase "blake2b-256 uses the whole 64-byte key" $
+        assertBool "the key was truncated to the digest size" $
+            macB256 64 /= macB256 32
+    ]
+  where
+    msg = "message" :: ByteString
+    key n = B.replicate n 7
+    macB512 n =
+        BA.convert (KB.keyedBlake2 (key n) msg :: KB.KeyedBlake2 (Blake2b 512)) :: ByteString
+    macB256 n =
+        BA.convert (KB.keyedBlake2 (key n) msg :: KB.KeyedBlake2 (Blake2b 256)) :: ByteString
+    macS256 n =
+        BA.convert (KB.keyedBlake2 (key n) msg :: KB.KeyedBlake2 (Blake2s 256)) :: ByteString
+    rejected m = do
+        r <- try (evaluate (B.length m))
+        case r of
+            Left (_ :: SomeException) -> return ()
+            Right _ ->
+                assertFailure $
+                    "an out-of-range key produced a MAC: " ++ show (B.unpack m)
+
 tests =
     testGroup
         "Blake2"
         [ testGroup "KATs" macTests
         , testGroup "properties" macIncrementalTests
+        , testGroup "key length" keyLengthTests
         ]
